@@ -1,6 +1,8 @@
 extern crate nom;
 
 mod shunting_yard;
+mod compiler;
+mod types;
 
 use shunting_yard::shunting_yard;
 
