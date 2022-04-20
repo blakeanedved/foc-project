@@ -5,6 +5,7 @@ mod compiler;
 mod types;
 
 use shunting_yard::shunting_yard;
+use types::*;
 
 use nom::{
   IResult,
@@ -15,31 +16,6 @@ use nom::{
   character::complete::{multispace0, i32, alpha1, alphanumeric1},
   sequence::{delimited, pair, preceded}, multi::{many0, many0_count}};
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum ExprToken {
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Pow,
-    LParen,
-    RParen,
-    Number(i32),
-    Ident(String),
-    Call { name: String, args: Vec<Vec<ExprToken>> }
-}
-
-#[derive(Debug)]
-pub enum Expr {
-    Add(Box<Expr>, Box<Expr>),
-    Sub(Box<Expr>, Box<Expr>),
-    Mul(Box<Expr>, Box<Expr>),
-    Div(Box<Expr>, Box<Expr>),
-    Pow(Box<Expr>, Box<Expr>),
-    Number(i32),
-    Ident(String),
-    Call { name: String, args: Vec<Box<Expr>> }
-}
 
 fn ws<'a, F: 'a, O, E: ParseError<&'a str>>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, O, E>
   where
