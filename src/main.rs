@@ -19,6 +19,7 @@ pub enum ExprToken {
     Sub,
     Mul,
     Div,
+    Pow,
     LParen,
     RParen,
     Number(i32),
@@ -32,6 +33,7 @@ pub enum Expr {
     Sub(Box<Expr>, Box<Expr>),
     Mul(Box<Expr>, Box<Expr>),
     Div(Box<Expr>, Box<Expr>),
+    Pow(Box<Expr>, Box<Expr>),
     Number(i32),
     Ident(String),
     Call { name: String, args: Vec<Box<Expr>> }
@@ -84,7 +86,7 @@ fn term(input: &str) -> IResult<&str, Vec<ExprToken>> {
 
 fn op(input: &str) -> IResult<&str, ExprToken> {
     map(
-        alt((tag("+"), tag("-"), tag("*"), tag("/"))),
+        alt((tag("+"), tag("-"), tag("*"), tag("/"), tag("^"))),
         |op| {
             use ExprToken::*;
             match op {
@@ -92,6 +94,7 @@ fn op(input: &str) -> IResult<&str, ExprToken> {
                 "-" => Sub,
                 "*" => Mul,
                 "/" => Div,
+                "^" => Pow,
                 _ => unreachable!()
             }
         }
@@ -129,5 +132,5 @@ fn expr_list(input: &str) -> IResult<&str, Vec<Vec<ExprToken>>> {
 
 fn main() {
   println!("{:?}", shunting_yard(&mut expr("f(x*2, y+(5/3))").unwrap().1));
-  println!("{:?}", shunting_yard(&mut expr("5 * f ( x )").unwrap().1));
+  println!("{:?}", shunting_yard(&mut expr("4 ^ 3 ^ 2").unwrap().1));
 }
