@@ -7,16 +7,17 @@ fn precedence(op: &ExprToken) -> i16 {
         Sub => 1,
         Mul => 2,
         Div => 2,
+        Pow => 3,
         LParen => 0,
         RParen => -1,
-        _ => unreachable!()
+        _ => unreachable!(),
     }
 }
 
 fn is_op(e: &ExprToken) -> bool {
     use ExprToken::*;
     match e {
-        Add | Sub | Mul | Div | LParen | RParen => true,
+        Add | Sub | Mul | Div | Pow | LParen | RParen => true,
         _ => false,
     }
 }
@@ -28,7 +29,7 @@ pub fn shunting_yard(tokens: &mut Vec<ExprToken>) -> Box<Expr> {
     for token in tokens.into_iter() {
         if is_op(token) {
             let prec = precedence(token);
-            
+
             while !op_stack.is_empty() {
                 if *token == ExprToken::LParen {
                     break;
@@ -40,7 +41,9 @@ pub fn shunting_yard(tokens: &mut Vec<ExprToken>) -> Box<Expr> {
                     } else {
                         rpn.push(op.1)
                     }
-                } /* TODO equal precedence left associative popping */ else {
+                }
+                /* TODO equal precedence left associative popping */
+                else {
                     break;
                 }
             }
@@ -73,15 +76,19 @@ pub fn shunting_yard(tokens: &mut Vec<ExprToken>) -> Box<Expr> {
                 Sub => Expr::Sub(lhs, rhs),
                 Mul => Expr::Mul(lhs, rhs),
                 Div => Expr::Div(lhs, rhs),
-                _ => unreachable!()
+                Pow => Expr::Pow(lhs, rhs),
+                _ => unreachable!(),
             };
             expr_trees.push(Box::new(new_expr));
         } else {
             expr_trees.push(Box::new(match token {
                 Number(v) => Expr::Number(*v),
                 Ident(s) => Expr::Ident(s.clone()),
-                Call { name, args } => Expr::Call { name: name.clone(), args: args.into_iter().map(shunting_yard).collect() },
-                _ =>  unreachable!()
+                Call { name, args } => Expr::Call {
+                    name: name.clone(),
+                    args: args.into_iter().map(shunting_yard).collect(),
+                },
+                _ => unreachable!(),
             }));
         }
     }
