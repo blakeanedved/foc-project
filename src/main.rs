@@ -64,7 +64,7 @@ fn term(input: &str) -> IResult<&str, Vec<ExprToken>> {
 
 fn op(input: &str) -> IResult<&str, ExprToken> {
     map(
-        alt((tag("+"), tag("-"), tag("*"), tag("/"), tag("^"))),
+        alt((tag("+"), tag("-"), tag("*"), tag("/"), tag("^"),  tag("<="), tag(">="), tag("<"), tag(">"),  tag("=="), tag("!="))),
         |op| {
             use ExprToken::*;
             match op {
@@ -73,6 +73,12 @@ fn op(input: &str) -> IResult<&str, ExprToken> {
                 "*" => Mul,
                 "/" => Div,
                 "^" => Pow,
+                "<=" => Leq,
+                ">=" => Geq,
+                "<" => Lt,
+                ">" => Gt,
+                "==" => Eq,
+                "!=" => Neq, 
                 _ => unreachable!()
             }
         }
@@ -110,5 +116,5 @@ fn expr_list(input: &str) -> IResult<&str, Vec<Vec<ExprToken>>> {
 
 fn main() {
   println!("{:?}", shunting_yard(&mut expr("f(x*2, y+(5/3))").unwrap().1));
-  println!("{:?}", shunting_yard(&mut expr("4 ^ 3 ^ 2").unwrap().1));
+  println!("{:?}", shunting_yard(&mut expr("4 <= 2").unwrap().1));
 }
