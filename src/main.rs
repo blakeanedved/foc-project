@@ -108,7 +108,11 @@ fn expr_list(input: &str) -> IResult<&str, Vec<Vec<ExprToken>>> {
     ))(input)
 }
 
-fn main() {
-  println!("{:?}", shunting_yard(&mut expr("f(x*2, y+(5/3))").unwrap().1));
-  println!("{:?}", shunting_yard(&mut expr("4 ^ 3 ^ 2").unwrap().1));
+fn main() -> anyhow::Result<()> {
+  println!("{:?}", shunting_yard(&mut expr("f(x*2, y+(5/3))")?.1));
+  println!("{:?}", shunting_yard(&mut expr("4 ^ 3 ^ 2")?.1));
+
+  compiler::compile(vec![Stmt::Expression(shunting_yard(&mut expr("1+2-3*4/5^6")?.1))])?;
+
+  Ok(())
 }
