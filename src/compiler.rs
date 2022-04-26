@@ -1,11 +1,24 @@
 use crate::types::*;
+use crate::utils::*;
 use lasso::{Rodeo, Spur};
 use std::collections::HashMap;
+use std::fs::write;
+use std::io::Write;
+use std::process::Command;
+use std::process::Stdio;
+
+const C_HEADER: &str = r#"#include <stdio.h>
+#include <math.h>"#;
 
 pub struct Compiler {
     ref_env: HashMap<Spur, String>,
     rodeo: Rodeo,
     functions: Vec<String>,
+}
+
+#[derive(Default)]
+pub struct CompilerOptions {
+    pub intermediate_files: bool,
 }
 
 impl Compiler {
@@ -17,51 +30,90 @@ impl Compiler {
         }
     }
 
-    pub fn compile(&mut self, prog: Program) -> anyhow::Result<String> {
-        let code = self.compile_program(prog, "main", vec![])?;
+    pub fn compile(
+        prog: &Program,
+        options: CompilerOptions,
+        input_filestem: String,
+    ) -> anyhow::Result<()> {
+        let mut c = Compiler::new();
 
-        let functions = self.functions.join("\n");
+        let code = c.compile_program(&prog, "main", &vec![])?;
 
-        Ok(format!("{}\n{}", functions, code))
+        let functions = c.functions.join("\n");
+
+        let program = format!("{}\n{}\n{}", C_HEADER, functions, code);
+
+        if options.intermediate_files {
+            write(format!("{}.c", input_filestem), &program)?;
+        }
+
+        let mut cmd = Command::new("gcc");
+        cmd.args(&["-o", &input_filestem, "-x", "c", "-"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        let mut child = cmd.spawn().expect("could not start gcc");
+
+        let stdin = child.stdin.as_mut().unwrap();
+
+        stdin.write_all(program.as_bytes())?;
+
+        let output = child.wait_with_output()?;
+
+        if output.status.success() {
+            println!("{}", String::from_utf8_lossy(&output.stdout));
+        } else {
+            println!(
+                "Program compilation failed\n{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        Ok(())
     }
 
     pub fn compile_program(
         &mut self,
-        prog: Program,
+        prog: &Program,
         fn_name: impl AsRef<str>,
-        args: Vec<String>,
+        args: &Vec<String>,
     ) -> anyhow::Result<String> {
-        let mut program = format!(
-            "double {}({}){{\n",
-            fn_name.as_ref(),
-            args.into_iter()
-                .map(|s| format!(
-                    "{} {}",
-                    if fn_name.as_ref() == "main" {
-                        "int"
-                    } else {
-                        "double"
-                    },
-                    s
-                ))
-                .collect::<Vec<_>>()
-                .join(",")
-        );
+        if self.rodeo.contains(fn_name.as_ref().clone()) {
+            return Err(anyhow::anyhow!(
+                "function {} already exists",
+                fn_name.as_ref()
+            ));
+        }
 
-        for (_i, stmt) in prog.into_iter().enumerate() {
-            program.push('\t');
-            match stmt {
-                Stmt::Expression(expr) => {
-                    program.push_str(&format!("printf(\"%d\\n\", {})", self.compile_expr(expr)?))
-                }
-                Stmt::FunctionDefinition { name, args, body } => {
-                    let f = self.compile_program(body, name, args)?;
-                    self.functions.push(f);
-                }
-                _ => unimplemented!(),
-            };
+        let mut program = if fn_name.as_ref() == "main" {
+            String::from("int main(){\n")
+        } else {
+            let key = self.rodeo.get_or_intern(fn_name.as_ref());
+            let name = generate_function_name(fn_name.as_ref());
+            self.ref_env.insert(key, name.clone());
 
-            program.push_str(";\n");
+            format!(
+                "double {}({}){{\n",
+                name,
+                args.into_iter()
+                    .map(|s| format!("double {}", s))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            )
+        };
+
+        program.push_str(&self.compile_body(
+            prog,
+            if fn_name.as_ref() == "main" {
+                false
+            } else {
+                true
+            },
+        )?);
+
+        if fn_name.as_ref() == "main" {
+            program.push_str("\treturn 0;\n");
         }
 
         program.push_str("}\n");
@@ -69,16 +121,95 @@ impl Compiler {
         Ok(program)
     }
 
-    fn compile_expr(&self, expr: Box<Expr>) -> anyhow::Result<String> {
-        Ok(match *expr {
-            Expr::Number(n) => n.to_string(),
-            Expr::Ident(ident) => {
-                let ident_key = self
-                    .rodeo
-                    .get(ident)
-                    .ok_or(anyhow::anyhow!("variable must exist"))?;
-                self.ref_env.get(&ident_key).unwrap().clone()
+    fn compile_body(&mut self, body: &Program, function_body: bool) -> anyhow::Result<String> {
+        let mut program = String::new();
+
+        let count = body.len();
+
+        for (i, stmt) in body.into_iter().enumerate() {
+            match stmt {
+                Stmt::Expression(ref expr) => {
+                    if i == count - 1 && function_body == true {
+                        program.push_str(&format!("\treturn {};\n", self.compile_expr(expr)?));
+                    } else {
+                        program.push_str(&format!(
+                            "\tprintf(\"%d\\n\", {});\n",
+                            self.compile_expr(expr)?
+                        ));
+                    }
+                }
+                Stmt::FunctionDefinition {
+                    ref name,
+                    ref args,
+                    ref body,
+                } => {
+                    let f = self.compile_program(body, name, args)?;
+                    self.functions.push(f);
+                }
+                Stmt::Assignment {
+                    ref name,
+                    ref value,
+                } => {
+                    program.push_str(&format!("\t{}={}\n", name, self.compile_expr(value)?));
+                }
+                Stmt::IfStatement {
+                    ref cond,
+                    ref body,
+                    ref branch,
+                } => {
+                    match branch {
+                        Some(b) => program.push_str(&format!(
+                            "\tif ({}){{\n{}\t}} else {{\n{}\t}}\n",
+                            self.compile_expr(cond)?,
+                            self.compile_body(body, false)?,
+                            self.compile_body(b, false)?
+                        )),
+                        None => program.push_str(&format!(
+                            "\tif ({}){{\n{}\t}}\n",
+                            self.compile_expr(cond)?,
+                            self.compile_body(body, false)?
+                        )),
+                    };
+                }
+                Stmt::For {
+                    ref body,
+                    ref ident,
+                    ref exprs,
+                } => program.push_str(&match exprs.len() {
+                    1 => format!(
+                        "\tfor (int {}=0;{0}<{};{0}++){{\n{}\t}}\n",
+                        ident,
+                        self.compile_expr(&exprs[0])?,
+                        self.compile_body(body, false)?
+                    ),
+                    2 => format!(
+                        "\tfor (int {}=(int){};{1}>{2}?(int){0}>(int){2}:(int){0}<(int){};{1}>{2}?{0}--:{0}++){{\n{}\t}}\n",
+                        ident,
+                        self.compile_expr(&exprs[0])?,
+                        self.compile_expr(&exprs[1])?,
+                        self.compile_body(body, false)?
+                    ), // start>stop?i>stop:i<stop
+                    3 => format!(
+                        "\tfor (int {}=(int){};{1}>{2}?(int){0}>(int){2}:(int){0}<(int){};{0}+=(int){}){{\n{}\t}}\n",
+                        ident,
+                        self.compile_expr(&exprs[0])?,
+                        self.compile_expr(&exprs[1])?,
+                        self.compile_expr(&exprs[2])?,
+                        self.compile_body(body, false)?
+                    ),
+                    _ => unreachable!(),
+                }),
+                Stmt::While { body, expr } => program.push_str(&format!("\twhile ({}){{\n{}\t}}\n", self.compile_expr(expr)?, self.compile_body(body, false)?)),
             }
+        }
+
+        Ok(program)
+    }
+
+    fn compile_expr(&self, expr: &Box<Expr>) -> anyhow::Result<String> {
+        Ok(match (**expr).clone() {
+            Expr::Number(n) => n.to_string(),
+            Expr::Ident(ident) => ident,
             Expr::Call { name, args } => {
                 let ident_key = self
                     .rodeo
@@ -88,29 +219,46 @@ impl Compiler {
                     "{}({})",
                     self.ref_env.get(&ident_key).unwrap().clone(),
                     args.into_iter()
-                        .map(|a| self.compile_expr(a))
+                        .map(|a| self.compile_expr(&a))
                         .collect::<Result<Vec<_>, anyhow::Error>>()?
                         .join(",")
                 )
             }
-            Expr::Add(lhs, rhs) => {
+            Expr::Add(ref lhs, ref rhs) => {
                 format!("({}+{})", self.compile_expr(lhs)?, self.compile_expr(rhs)?)
             }
-            Expr::Sub(lhs, rhs) => {
+            Expr::Sub(ref lhs, ref rhs) => {
                 format!("({}-{})", self.compile_expr(lhs)?, self.compile_expr(rhs)?)
             }
-            Expr::Mul(lhs, rhs) => {
+            Expr::Mul(ref lhs, ref rhs) => {
                 format!("({}*{})", self.compile_expr(lhs)?, self.compile_expr(rhs)?)
             }
-            Expr::Div(lhs, rhs) => {
+            Expr::Div(ref lhs, ref rhs) => {
                 format!("({}/{})", self.compile_expr(lhs)?, self.compile_expr(rhs)?)
             }
-            Expr::Pow(lhs, rhs) => format!(
+            Expr::Pow(ref lhs, ref rhs) => format!(
                 "pow({},{})",
                 self.compile_expr(lhs)?,
                 self.compile_expr(rhs)?
             ),
-            _ => unimplemented!(),
+            Expr::Leq(ref lhs, ref rhs) => {
+                format!("({}<={})", self.compile_expr(lhs)?, self.compile_expr(rhs)?)
+            }
+            Expr::Geq(ref lhs, ref rhs) => {
+                format!("({}>={})", self.compile_expr(lhs)?, self.compile_expr(rhs)?)
+            }
+            Expr::Lt(ref lhs, ref rhs) => {
+                format!("({}<{})", self.compile_expr(lhs)?, self.compile_expr(rhs)?)
+            }
+            Expr::Gt(ref lhs, ref rhs) => {
+                format!("({}>{})", self.compile_expr(lhs)?, self.compile_expr(rhs)?)
+            }
+            Expr::Eq(ref lhs, ref rhs) => {
+                format!("({}=={})", self.compile_expr(lhs)?, self.compile_expr(rhs)?)
+            }
+            Expr::Neq(ref lhs, ref rhs) => {
+                format!("({}!={})", self.compile_expr(lhs)?, self.compile_expr(rhs)?)
+            }
         })
     }
 }

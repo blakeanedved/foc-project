@@ -61,10 +61,18 @@ pub fn float(input: &str) -> IResult<&str, f64> {
 }
 
 fn ident(input: &str) -> IResult<&str, &str> {
-    recognize(pair(
+    let (i, ident) = recognize(pair(
         alt((alpha1, tag("_"))),
         many0_count(alt((alphanumeric1, tag("_")))),
-    ))(input)
+    ))(input)?;
+
+    match ident {
+        "do" | "end" => Err(nom::Err::Error(nom::error::ParseError::from_error_kind(
+            i,
+            nom::error::ErrorKind::Tag,
+        ))),
+        _ => Ok((i, ident)),
+    }
 }
 
 fn unary(input: &str) -> IResult<&str, ExprToken> {

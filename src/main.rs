@@ -4,11 +4,14 @@ mod compiler;
 mod parser;
 mod shunting_yard;
 mod types;
+mod utils;
 
-use compiler::Compiler;
+use compiler::{Compiler, CompilerOptions};
 use parser::*;
 use shunting_yard::shunting_yard;
 use types::*;
+
+use std::path::Path;
 
 fn main() -> anyhow::Result<()> {
     // println!(
@@ -19,17 +22,25 @@ fn main() -> anyhow::Result<()> {
     println!("{:?}", parser::float("1.0")?);
     // println!("{:?}", parser::program("for i,n do 1 end")?);
 
-    // let mut c = Compiler::new();
-    // let p = c.compile(vec![Stmt::FunctionDefinition {
-    //     name: String::from("foo"),
-    //     args: vec![String::from("x")],
-    //     body: vec![Stmt::FunctionDefinition {
-    //         name: String::from("foo"),
-    //         args: vec![String::from("x")],
-    //         body: vec![Stmt::Expression(Box::new(Expr::Number(1.0)))],
-    //     }],
-    // }])?;
-    // println!("==============================\n{}", p);
+    let filename = String::from("file.cx");
+
+    Compiler::compile(
+        &vec![Stmt::For {
+            body: vec![Stmt::Expression(Box::new(Expr::Ident(String::from("i"))))],
+            ident: String::from("i"),
+            exprs: vec![
+                Box::new(Expr::Number(0.0)),
+                Box::new(Expr::Number(10.0)),
+                Box::new(Expr::Number(1.0)),
+            ],
+        }],
+        CompilerOptions::default(),
+        Path::new(&filename)
+            .file_stem()
+            .unwrap()
+            .to_string_lossy()
+            .to_string(),
+    )?;
 
     Ok(())
 }
