@@ -3,11 +3,22 @@ use crate::{Expr, ExprToken};
 fn precedence(op: &ExprToken) -> i16 {
     use ExprToken::*;
     match op {
-        Add => 1,
-        Sub => 1,
-        Mul => 2,
-        Div => 2,
-        Pow => 3,
+        Eq => 2,
+        Neq => 2,
+
+        Leq => 3,
+        Geq => 3,
+        Lt => 3,
+        Gt => 3,
+
+        Add => 4,
+        Sub => 4,
+
+        Mul => 5,
+        Div => 5,
+
+        Pow => 6,
+
         LParen => 0,
         RParen => -1,
         _ => unreachable!(),
@@ -17,7 +28,7 @@ fn precedence(op: &ExprToken) -> i16 {
 fn is_op(e: &ExprToken) -> bool {
     use ExprToken::*;
     match e {
-        Add | Sub | Mul | Div | Pow | LParen | RParen => true,
+        Add | Sub | Mul | Div | Pow | Leq | Geq | Lt | Gt | Eq | Neq | LParen | RParen => true,
         _ => false,
     }
 }
@@ -77,6 +88,12 @@ pub fn shunting_yard(tokens: &mut Vec<ExprToken>) -> Box<Expr> {
                 Mul => Expr::Mul(lhs, rhs),
                 Div => Expr::Div(lhs, rhs),
                 Pow => Expr::Pow(lhs, rhs),
+                Leq => Expr::Leq(lhs, rhs),
+                Geq => Expr::Geq(lhs, rhs),
+                Lt => Expr::Lt(lhs, rhs),
+                Gt => Expr::Gt(lhs, rhs),
+                Eq => Expr::Eq(lhs, rhs),
+                Neq => Expr::Neq(lhs, rhs),
                 _ => unreachable!(),
             };
             expr_trees.push(Box::new(new_expr));
