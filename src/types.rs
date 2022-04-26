@@ -62,6 +62,10 @@ pub enum Stmt {
         body: Program,
         expr: Box<Expr>,
     },
+    Declaration {
+        name: String,
+        value: Box<Expr>,
+    },
     Assignment {
         name: String,
         value: Box<Expr>,

@@ -4,7 +4,7 @@ use nom::{
     character::complete::{alpha1, alphanumeric1, digit0, digit1, multispace0},
     combinator::{map, map_res, opt, recognize, success},
     error::ParseError,
-    multi::{many0, many0_count, many1, many_m_n},
+    multi::{many0, many0_count, many_m_n},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
     IResult,
 };
@@ -59,6 +59,22 @@ fn while_loop(input: &str) -> IResult<&str, Stmt> {
     )(input)
 }
 
+fn declaration(input: &str) -> IResult<&str, Stmt> {
+    alt((
+        map(
+            preceded(ws(tag("local")), separated_pair(ident, ws(tag("=")), expr)),
+            |(ident, mut expr)| Stmt::Declaration {
+                name: String::from(ident),
+                value: shunting_yard(&mut expr),
+            },
+        ),
+        map(preceded(ws(tag("local")), ident), |s| Stmt::Declaration {
+            name: String::from(s),
+            value: Box::new(Expr::Number(0.0)),
+        }),
+    ))(input)
+}
+
 fn assignment(input: &str) -> IResult<&str, Stmt> {
     map(
         pair(terminated(ident, ws(tag("="))), expr),
@@ -77,7 +93,7 @@ fn if_block(input: &str) -> IResult<&str, Stmt> {
                 program,
                 opt(alt((
                     preceded(ws(tag("else")), map(if_block, |e| vec![e])),
-                    preceded(ws(tag("else")), preceded(ws(tag("do")), program)),
+                    preceded(ws(tag("else")), program),
                 ))),
             ),
         ),
@@ -154,10 +170,7 @@ fn function_def(input: &str) -> IResult<&str, Stmt> {
 fn float(input: &str) -> IResult<&str, f64> {
     map_res(
         alt((recognize(tuple((digit0, tag("."), digit1))), digit1)),
-        |e: &str| {
-            println!("{}", e);
-            e.parse()
-        },
+        |e: &str| e.parse(),
     )(input)
 }
 
@@ -168,7 +181,7 @@ fn ident(input: &str) -> IResult<&str, &str> {
     ))(input)?;
 
     match ident {
-        "do" | "end" | "for" | "while" | "if" | "else" => Err(nom::Err::Error(
+        "do" | "end" | "for" | "while" | "if" | "else" | "local" => Err(nom::Err::Error(
             nom::error::ParseError::from_error_kind(i, nom::error::ErrorKind::Tag),
         )),
         _ => Ok((i, ident)),
@@ -185,7 +198,7 @@ fn unary(input: &str) -> IResult<&str, ExprToken> {
                 args: e,
             },
         ),
-        map(ident, |s| dbg!(ExprToken::Ident(String::from(s)))),
+        map(ident, |s| ExprToken::Ident(String::from(s))),
     ))(input)
 }
 
@@ -220,7 +233,7 @@ fn op(input: &str) -> IResult<&str, ExprToken> {
         )),
         |op| {
             use ExprToken::*;
-            match dbg!(op) {
+            match op {
                 "+" => Add,
                 "-" => Sub,
                 "*" => Mul,
@@ -274,10 +287,23 @@ fn stmt(input: &str) -> IResult<&str, Stmt> {
         if_stmt,
         function_def,
         assignment,
+        declaration,
         stmt_expr,
     ))(input)
 }
 
 pub fn program(input: &str) -> IResult<&str, Program> {
     many0(stmt)(input)
+}
+
+pub fn parse(input: &str) -> Program {
+    let p = program(input);
+
+    match p {
+        Ok(v) => v.1,
+        Err(_) => {
+            eprintln!("failed to parse input");
+            std::process::exit(1)
+        }
+    }
 }

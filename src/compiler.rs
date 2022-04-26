@@ -4,21 +4,25 @@ use lasso::{Rodeo, Spur};
 use std::collections::HashMap;
 use std::fs::write;
 use std::io::Write;
+use std::path::Path;
 use std::process::Command;
 use std::process::Stdio;
 
 const C_HEADER: &str = r#"#include <stdio.h>
-#include <math.h>"#;
+#include <math.h>
+
+void print_number(double n){
+	if (n==(long long)n) {
+		printf("%lld\n", (long long)n);
+	} else {
+		printf("%lf\n", (double)n);
+	}
+}"#;
 
 pub struct Compiler {
     ref_env: HashMap<Spur, String>,
     rodeo: Rodeo,
     functions: Vec<String>,
-}
-
-#[derive(Default)]
-pub struct CompilerOptions {
-    pub intermediate_files: bool,
 }
 
 impl Compiler {
@@ -30,11 +34,7 @@ impl Compiler {
         }
     }
 
-    pub fn compile(
-        prog: &Program,
-        options: CompilerOptions,
-        input_filestem: String,
-    ) -> anyhow::Result<()> {
+    pub fn compile(prog: &Program, args: crate::Args) -> anyhow::Result<()> {
         let mut c = Compiler::new();
 
         let code = c.compile_program(&prog, "main", &vec![])?;
@@ -43,15 +43,31 @@ impl Compiler {
 
         let program = format!("{}\n{}\n{}", C_HEADER, functions, code);
 
-        if options.intermediate_files {
+        let input_filestem = Path::new(&args.filename)
+            .file_stem()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
+
+        if args.intermediates {
             write(format!("{}.c", input_filestem), &program)?;
         }
 
         let mut cmd = Command::new("gcc");
-        cmd.args(&["-o", &input_filestem, "-x", "c", "-"])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+        cmd.args(&[
+            "-o",
+            &if let Some(filename) = args.output {
+                filename
+            } else {
+                input_filestem
+            },
+            "-x",
+            "c",
+            "-",
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
 
         let mut child = cmd.spawn().expect("could not start gcc");
 
@@ -133,7 +149,7 @@ impl Compiler {
                         program.push_str(&format!("\treturn {};\n", self.compile_expr(expr)?));
                     } else {
                         program.push_str(&format!(
-                            "\tprintf(\"%d\\n\", {});\n",
+                            "\tprint_number({});\n",
                             self.compile_expr(expr)?
                         ));
                     }
@@ -146,11 +162,17 @@ impl Compiler {
                     let f = self.compile_program(body, name, args)?;
                     self.functions.push(f);
                 }
+                Stmt::Declaration {
+                    ref name,
+                    ref value,
+                } => {
+                    program.push_str(&format!("\tdouble {}={};\n", name, self.compile_expr(value)?));
+                }
                 Stmt::Assignment {
                     ref name,
                     ref value,
                 } => {
-                    program.push_str(&format!("\t{}={}\n", name, self.compile_expr(value)?));
+                    program.push_str(&format!("\t{}={};\n", name, self.compile_expr(value)?));
                 }
                 Stmt::IfStatement {
                     ref cond,

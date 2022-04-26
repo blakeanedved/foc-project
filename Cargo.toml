@@ -11,3 +11,4 @@ anyhow = "1.0"
 lasso = "0.6.0"
 itertools = "0.10.3"
 rand = "0.8.5"
+clap = { version = "3.1.12", features = ["derive"] }
