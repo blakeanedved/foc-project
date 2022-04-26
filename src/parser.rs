@@ -5,7 +5,7 @@ use nom::{
     combinator::{map, map_res, opt, recognize, success},
     error::ParseError,
     multi::{many0, many0_count, many1, many_m_n},
-    sequence::{delimited, pair, preceded, terminated, tuple},
+    sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
     IResult,
 };
 
@@ -36,21 +36,122 @@ fn for_loop(input: &str) -> IResult<&str, Stmt> {
                 ),
                 ws(tag("do")),
             ),
-            terminated(tag("1"), ws(tag("end"))),
+            terminated(program, ws(tag("end"))),
         ),
         |((ident, exprs), body)| Stmt::For {
-            body: vec![],
+            body,
             ident: String::from(ident),
             exprs,
         },
     )(input)
 }
 
+fn while_loop(input: &str) -> IResult<&str, Stmt> {
+    map(
+        pair(
+            delimited(ws(tag("while")), expr, ws(tag("do"))),
+            terminated(program, ws(tag("end"))),
+        ),
+        |(mut expr, body)| Stmt::While {
+            body,
+            expr: shunting_yard(&mut expr),
+        },
+    )(input)
+}
+
+fn assignment(input: &str) -> IResult<&str, Stmt> {
+    map(
+        pair(terminated(ident, ws(tag("="))), expr),
+        |(ident, mut expr)| Stmt::Assignment {
+            name: String::from(ident),
+            value: shunting_yard(&mut expr),
+        },
+    )(input)
+}
+
+fn if_block(input: &str) -> IResult<&str, Stmt> {
+    map(
+        pair(
+            delimited(ws(tag("if")), expr, ws(tag("do"))),
+            pair(
+                program,
+                opt(alt((
+                    preceded(ws(tag("else")), map(if_block, |e| vec![e])),
+                    preceded(ws(tag("else")), preceded(ws(tag("do")), program)),
+                ))),
+            ),
+        ),
+        |(mut expr, (body, branch))| Stmt::IfStatement {
+            cond: shunting_yard(&mut expr),
+            body,
+            branch,
+        },
+    )(input)
+}
+
+fn if_stmt(input: &str) -> IResult<&str, Stmt> {
+    terminated(if_block, ws(tag("end")))(input)
+}
+
 fn stmt_expr(input: &str) -> IResult<&str, Stmt> {
     map(expr, |mut e| Stmt::Expression(shunting_yard(&mut e)))(input)
 }
 
-pub fn float(input: &str) -> IResult<&str, f64> {
+fn function_def(input: &str) -> IResult<&str, Stmt> {
+    alt((
+        map(
+            separated_pair(
+                pair(
+                    ident,
+                    delimited(
+                        ws(tag("(")),
+                        opt(pair(ident, many0(preceded(ws(tag(",")), ident)))),
+                        ws(tag(")")),
+                    ),
+                ),
+                ws(tag("=")),
+                stmt_expr,
+            ),
+            |((ident, params), expr)| Stmt::FunctionDefinition {
+                name: String::from(ident),
+                args: if let Some((args0, args)) = params {
+                    let mut v = vec![String::from(args0)];
+                    v.extend(args.into_iter().map(String::from));
+                    v
+                } else {
+                    vec![]
+                },
+                body: vec![expr],
+            },
+        ),
+        map(
+            pair(
+                pair(
+                    ident,
+                    delimited(
+                        ws(tag("(")),
+                        opt(pair(ident, many0(preceded(ws(tag(",")), ident)))),
+                        ws(tag(")")),
+                    ),
+                ),
+                delimited(ws(tag("do")), program, ws(tag("end"))),
+            ),
+            |((name, params), body)| Stmt::FunctionDefinition {
+                name: String::from(name),
+                args: if let Some((args0, args)) = params {
+                    let mut v = vec![String::from(args0)];
+                    v.extend(args.into_iter().map(String::from));
+                    v
+                } else {
+                    vec![]
+                },
+                body,
+            },
+        ),
+    ))(input)
+}
+
+fn float(input: &str) -> IResult<&str, f64> {
     map_res(
         alt((recognize(tuple((digit0, tag("."), digit1))), digit1)),
         |e: &str| {
@@ -61,10 +162,17 @@ pub fn float(input: &str) -> IResult<&str, f64> {
 }
 
 fn ident(input: &str) -> IResult<&str, &str> {
-    recognize(pair(
+    let (i, ident) = recognize(pair(
         alt((alpha1, tag("_"))),
         many0_count(alt((alphanumeric1, tag("_")))),
-    ))(input)
+    ))(input)?;
+
+    match ident {
+        "do" | "end" | "for" | "while" | "if" | "else" => Err(nom::Err::Error(
+            nom::error::ParseError::from_error_kind(i, nom::error::ErrorKind::Tag),
+        )),
+        _ => Ok((i, ident)),
+    }
 }
 
 fn unary(input: &str) -> IResult<&str, ExprToken> {
@@ -77,7 +185,7 @@ fn unary(input: &str) -> IResult<&str, ExprToken> {
                 args: e,
             },
         ),
-        map(ident, |s| ExprToken::Ident(String::from(s))),
+        map(ident, |s| dbg!(ExprToken::Ident(String::from(s)))),
     ))(input)
 }
 
@@ -112,7 +220,7 @@ fn op(input: &str) -> IResult<&str, ExprToken> {
         )),
         |op| {
             use ExprToken::*;
-            match op {
+            match dbg!(op) {
                 "+" => Add,
                 "-" => Sub,
                 "*" => Mul,
@@ -160,9 +268,16 @@ fn expr_list(input: &str) -> IResult<&str, Vec<Vec<ExprToken>>> {
 }
 
 fn stmt(input: &str) -> IResult<&str, Stmt> {
-    alt((for_loop, stmt_expr))(input)
+    alt((
+        for_loop,
+        while_loop,
+        if_stmt,
+        function_def,
+        assignment,
+        stmt_expr,
+    ))(input)
 }
 
 pub fn program(input: &str) -> IResult<&str, Program> {
-    many1(stmt)(input)
+    many0(stmt)(input)
 }
