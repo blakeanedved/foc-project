@@ -13,12 +13,15 @@ pub enum ExprToken {
     Neq,
     LParen,
     RParen,
-    Number(i32),
+    Number(f64),
     Ident(String),
-    Call { name: String, args: Vec<Vec<ExprToken>> }
+    Call {
+        name: String,
+        args: Vec<Vec<ExprToken>>,
+    },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     Add(Box<Expr>, Box<Expr>),
     Sub(Box<Expr>, Box<Expr>),
@@ -31,18 +34,34 @@ pub enum Expr {
     Gt(Box<Expr>, Box<Expr>),
     Eq(Box<Expr>, Box<Expr>),
     Neq(Box<Expr>, Box<Expr>),
-    Number(i32),
+    Number(f64),
     Ident(String),
-    Call { name: String, args: Vec<Box<Expr>> }
+    Call { name: String, args: Vec<Box<Expr>> },
 }
 
 pub type Program = Vec<Stmt>;
 
+#[derive(Debug)]
 pub enum Stmt {
-    FunctionDefinition{ name: String, args: Vec<String>, body: Program },
-    IfStatement{ cond: Box<Expr>, body: Program, branch: Option<Program> },
-    For{ body: Program },
-    While{  },
-    Assignment{ name: String, value: Box<Expr> },
-    Expression(Box<Expr>)
+    FunctionDefinition {
+        name: String,
+        args: Vec<String>,
+        body: Program,
+    },
+    IfStatement {
+        cond: Box<Expr>,
+        body: Program,
+        branch: Option<Program>,
+    },
+    For {
+        body: Program,
+        ident: String,
+        exprs: Vec<Box<Expr>>,
+    },
+    While {},
+    Assignment {
+        name: String,
+        value: Box<Expr>,
+    },
+    Expression(Box<Expr>),
 }
