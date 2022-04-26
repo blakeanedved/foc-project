@@ -39,5 +39,10 @@ pub enum Expr {
 pub type Program = Vec<Stmt>;
 
 pub enum Stmt {
-    
+    FunctionDefinition{ name: String, args: Vec<String>, body: Program },
+    IfStatement{ cond: Box<Expr>, body: Program, branch: Option<Program> },
+    For{ body: Program },
+    While{  },
+    Assignment{ name: String, value: Box<Expr> },
+    Expression(Box<Expr>)
 }

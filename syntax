@@ -1,0 +1,21 @@
+for i,10 do
+	
+end
+
+for i,0,10 do //var, start, stop
+
+end
+
+for i,0,10,1 do //var, start, stop, step
+
+end
+
+while expr do
+
+end
+
+f(x)=x*2
+
+f(x) do
+	x*2
+end
