@@ -3,22 +3,21 @@ use crate::{Expr, ExprToken};
 fn precedence(op: &ExprToken) -> i16 {
     use ExprToken::*;
     match op {
-        Eq => 1,
-        Neq => 1, 
+        Eq => 2,
+        Neq => 2,
 
-        Leq => 2,
-        Geq => 2,
-        Lt => 2,
-        Gt => 2,
-      
+        Leq => 3,
+        Geq => 3,
+        Lt => 3,
+        Gt => 3,
 
-        Add => 3,
-        Sub => 3,
+        Add => 4,
+        Sub => 4,
 
-        Mul => 4,
-        Div => 4,
+        Mul => 5,
+        Div => 5,
 
-        Pow => 5,
+        Pow => 6,
 
         LParen => 0,
         RParen => -1,
@@ -29,7 +28,7 @@ fn precedence(op: &ExprToken) -> i16 {
 fn is_op(e: &ExprToken) -> bool {
     use ExprToken::*;
     match e {
-        Add | Sub | Mul | Div | Pow | Leq | Geq | Lt | Gt | Eq | Neq |  LParen | RParen => true,
+        Add | Sub | Mul | Div | Pow | Leq | Geq | Lt | Gt | Eq | Neq | LParen | RParen => true,
         _ => false,
     }
 }
