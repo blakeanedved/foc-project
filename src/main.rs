@@ -6,6 +6,7 @@ mod types;
 
 use shunting_yard::shunting_yard;
 use types::*;
+use compiler::Compiler;
 
 use nom::{
   IResult,
@@ -112,7 +113,9 @@ fn main() -> anyhow::Result<()> {
   println!("{:?}", shunting_yard(&mut expr("f(x*2, y+(5/3))")?.1));
   println!("{:?}", shunting_yard(&mut expr("4 ^ 3 ^ 2")?.1));
 
-  compiler::compile(vec![Stmt::Expression(shunting_yard(&mut expr("1+2-3*4/5^6")?.1))])?;
+  let mut c = Compiler::new();
+  let p = c.compile(vec![Stmt::FunctionDefinition { name: String::from("foo"), args: vec![String::from("x")], body: vec![Stmt::FunctionDefinition { name: String::from("foo"), args: vec![String::from("x")], body: vec![Stmt::Expression(Box::new(Expr::Number(1)))] }]}])?;
+  println!("==============================\n{}", p);
 
   Ok(())
 }
