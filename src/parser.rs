@@ -50,10 +50,9 @@ fn stmt_expr(input: &str) -> IResult<&str, Stmt> {
     map(expr, |mut e| Stmt::Expression(shunting_yard(&mut e)))(input)
 }
 
-fn float(input: &str) -> IResult<&str, f64> {
-    println!("{}", input);
+pub fn float(input: &str) -> IResult<&str, f64> {
     map_res(
-        recognize(tuple((digit0, opt(tag(".")), digit1))),
+        alt((recognize(tuple((digit0, tag("."), digit1))), digit1)),
         |e: &str| {
             println!("{}", e);
             e.parse()
