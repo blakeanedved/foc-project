@@ -58,7 +58,10 @@ pub enum Stmt {
         ident: String,
         exprs: Vec<Box<Expr>>,
     },
-    While {},
+    While {
+        body: Program,
+        expr: Box<Expr>,
+    },
     Assignment {
         name: String,
         value: Box<Expr>,
