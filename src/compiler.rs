@@ -264,6 +264,7 @@ impl Compiler {
                 self.compile_expr(lhs)?,
                 self.compile_expr(rhs)?
             ),
+            Expr::Mod(ref lhs, ref rhs) => format!("((int){}%(int){})", self.compile_expr(lhs)?, self.compile_expr(rhs)?),
             Expr::Leq(ref lhs, ref rhs) => {
                 format!("({}<={})", self.compile_expr(lhs)?, self.compile_expr(rhs)?)
             }
