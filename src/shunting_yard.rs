@@ -16,6 +16,7 @@ fn precedence(op: &ExprToken) -> i16 {
 
         Mul => 5,
         Div => 5,
+        Mod => 5,
 
         Pow => 6,
 
@@ -28,7 +29,9 @@ fn precedence(op: &ExprToken) -> i16 {
 fn is_op(e: &ExprToken) -> bool {
     use ExprToken::*;
     match e {
-        Add | Sub | Mul | Div | Pow | Leq | Geq | Lt | Gt | Eq | Neq | LParen | RParen => true,
+        Add | Sub | Mul | Div | Mod | Pow | Leq | Geq | Lt | Gt | Eq | Neq | LParen | RParen => {
+            true
+        }
         _ => false,
     }
 }
@@ -88,6 +91,7 @@ pub fn shunting_yard(tokens: &mut Vec<ExprToken>) -> Box<Expr> {
                 Mul => Expr::Mul(lhs, rhs),
                 Div => Expr::Div(lhs, rhs),
                 Pow => Expr::Pow(lhs, rhs),
+                Mod => Expr::Mod(lhs, rhs),
                 Leq => Expr::Leq(lhs, rhs),
                 Geq => Expr::Geq(lhs, rhs),
                 Lt => Expr::Lt(lhs, rhs),

@@ -63,6 +63,7 @@ impl Compiler {
             },
             "-x",
             "c",
+            "-O3",
             "-",
         ])
         .stdin(Stdio::piped())

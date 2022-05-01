@@ -1,0 +1,11 @@
+g(x)=x*182
+
+f(x, y) do
+  local total
+  for i, g(x)+5, g(y)*5 do
+    total = total + i
+  end
+  total
+end
+
+f(1, 10)
